@@ -1,0 +1,202 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+
+
+```{r}
+link='https://raw.githubusercontent.com/ksyanyu/543Final/main/deliverable3/PopulationGrowthAllCountry.csv'
+
+library(rio)
+
+#getting the data TABLE from the file in the cloud:
+allCountry=rio::import(link)
+```
+```{r}
+
+```
+
+```{r}
+# We are interested in the data of 2019
+# keep the data of 2019 for all countries
+all2019=allCountry
+```
+
+```{r}
+all2019=all2019[all2019$Year==2019,]
+```
+
+```{r}
+all2019[all2019==''] = NA
+all2019=na.omit(all2019)
+```
+
+```{r}
+# explore the behavior of the numerical variable
+boxplot(all2019[,c('PopulationChange')])
+```
+
+```{r}
+str(all2019)
+```
+
+```{r}
+# transfer int into num
+all2019[,4]=as.numeric(all2019[,4])
+```
+
+
+
+
+```{r}
+str(all2019)
+```
+
+```{r}
+all2019[all2019=='World'] = NA
+all2019=na.omit(all2019)
+```
+
+
+```{r}
+# cluster the data using **pam**
+
+set.seed(123)
+
+library(cluster)
+var=c('PopulationChange', 'Year')
+
+distMatrix=cluster::daisy(all2019[,var])
+          
+res.pam=cluster::pam(x=distMatrix,
+                     k = 3,
+                     cluster.only = F)
+
+```
+
+
+# save the cluster info into the data frame:
+
+```{r}
+all2019$cluster=as.factor(res.pam$clustering)
+```
+
+Check order:
+
+```{r}
+theVars=c('PopulationChange', 'Year', 'cluster')
+aggregate(.~cluster,
+          data=all2019[,theVars],
+          FUN=median)
+```
+
+# recode so that number ordering make sense:
+
+```{r}
+all2019$cluster=factor(all2019$cluster,
+                           levels=c(2,1,3),
+                           labels=c("low","mid","high"), 
+                           ordered=T)
+```
+
+
+
+```{r}
+linkMap="https://github.com/EvansDataScience/VAforPM_Spatial/raw/main/worldMap.geojson" 
+
+library(sf)
+mapWorld=read_sf(linkMap)
+```
+
+This is the data that came with the map:
+
+```{r}
+# see data in map
+head(mapWorld)
+```
+
+```{r}
+# rename the column to make it easy to merge
+names(all2019)=c("Country", "ISO3", "Year", "PopulationChange", "cluster")
+```
+
+```{r}
+str(all2019)
+```
+
+
+# add our data to the map by merging:
+
+```{r}
+mapWorldVars=merge(mapWorld, #map first
+                   all2019, 
+                   by='ISO3') 
+```
+
+```{r}
+str(mapWorldVars)
+```
+
+# 1. Base layer: 
+
+```{r}
+library(ggplot2)
+# plot original map
+base=ggplot(data=mapWorld) + geom_sf(fill='grey90',
+                                     color=NA) + theme_classic()
+
+base #base map
+
+```
+
+# 2. Data layer:
+
+# This will be plot on top of the previous. Whatever is still in grey means a country has no information:
+
+```{r}
+colMap= base + geom_sf(data=mapWorldVars,
+                       aes(fill=PopulationChange),
+                       color=NA)
+colMap
+```
+
+# alter the color sequence:
+
+```{r}
+colMap + scale_fill_gradient(low = 'yellow',
+                             high= 'red')
+```
+
+
+# Now paint the countries using the cluster information (ggplot decides color):
+
+```{r}
+clusterMap= base + geom_sf(data=mapWorldVars,
+                           aes(fill=cluster),
+                           color=NA) # color of border
+clusterMap 
+```
+
+# Now we choose the palette (get it from [here](http://colorbrewer2.org/)):
+
+```{r}
+clusterMap+ scale_fill_brewer(palette ='Blues')
+```
+
+
+# Some more customization:
+
+```{r}
+#previously
+
+theLegTitle="Population growth\n(grey is missing)"
+
+#now
+clusterMap+ scale_fill_brewer(palette ='Blues',
+                             
+                              
+                              name=theLegTitle)
+```
